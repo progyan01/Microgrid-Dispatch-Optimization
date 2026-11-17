@@ -5,13 +5,14 @@ Both easy_model.py and hard_model.py import from here; data_prep.py does too.
 Sources
   PV model      : pvlib defaults (Faiman 1998, doi:10.1016/S0038-092X(98)00054-8)
   Battery cost  : NREL ATB 2024, Moderate scenario, utility-scale Li-ion
-                  (atb.nrel.gov/electricity/2024/utility-scale_battery_storage)
+                  (https://atb.nlr.gov/electricity/2024/utility-scale_battery_storage)
   Cycle life    : NREL ATB 2024; 3,000–5,000 cycles typical for LFP at 80–90% DoD
   Self-discharge: ~2%/month industry consensus for LFP pack incl. BMS parasitic draw
                   (Linden & Reddy, Handbook of Batteries; manufacturer spec sheets)
   Inverter P_min: 5–10% of rated power, typical efficiency-curve cutoff for commercial
                   3-phase string inverters (SMA, Fronius efficiency curves)
-  Tariff        : FPL GSDT-1, OpenEI URDB rate ID 66a911f6ad5e5f4d84062c74
+  Tariff        : FPL GSDT-1, OpenEI URDB
+                  (https://apps.openei.org/IURDB/rate/view/66a911f6ad5e5f4d84062c74)
 """
 
 import math
