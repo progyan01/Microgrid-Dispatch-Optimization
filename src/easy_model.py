@@ -218,8 +218,16 @@ def save(res: EasyResult, path: Path | None = None) -> Path:
 def load(path: Path | None = None) -> EasyResult:
     """Load a previously saved EasyResult."""
     src = Path(path) if path else RESULTS_DIR / "easy_result.pkl"
+
+    class _Unpickler(pickle.Unpickler):
+        def find_class(self, module, name):
+            # pickle saved under __main__ when run as a script; remap to this module
+            if module == "__main__":
+                module = "easy_model"
+            return super().find_class(module, name)
+
     with open(src, "rb") as f:
-        return pickle.load(f)
+        return _Unpickler(f).load()
 
 
 if __name__ == "__main__":
