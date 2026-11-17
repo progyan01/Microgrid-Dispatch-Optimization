@@ -18,6 +18,7 @@ Solved with scipy.optimize.linprog (HiGHS backend).
 """
 
 import sys
+import pickle
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -28,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import (
     DT, E_CAP, P_BAR, ETA_C, ETA_D,
     E_MIN, E_MAX, E_INIT, LAMBDA,
-    D_OFF, D_ON,
+    D_OFF, D_ON, RESULTS_DIR,
 )
 from data_prep import build_dataset
 
@@ -204,60 +205,21 @@ def solve(df: pd.DataFrame | None = None) -> EasyResult:
     )
 
 
-def summarise(res: EasyResult) -> None:
-    """Print a concise post-solve summary with key sanity checks."""
-    df    = res.df
-    T     = len(df)
-    L     = df["L"].values
-    S     = df["S"].values
-    month = df["month"].values
-    on    = df["period"].values == 2
+def save(res: EasyResult, path: Path | None = None) -> Path:
+    """Pickle the EasyResult to disk. Returns the path written."""
+    out = Path(path) if path else RESULTS_DIR / "easy_result.pkl"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "wb") as f:
+        pickle.dump(res, f)
+    print(f"Easy result saved → {out}")
+    return out
 
-    print("=" * 55)
-    print("Easy model (LP) — solution summary")
-    print("=" * 55)
-    print(f"  Solver status   : {res.status}")
-    print(f"  Total cost      : ${res.cost:,.2f}")
-    print(f"    Energy bill   : ${res.energy_bill:,.2f}")
-    print(f"    Demand charge : ${res.demand_bill:,.2f}")
-    print()
 
-    # Power balance residual (should be near machine epsilon)
-    residual = np.abs(res.g + res.s + res.pd - L - res.pc)
-    print(f"  Power balance — max residual : {residual.max():.2e} kW")
-
-    # Battery energy bounds
-    print(f"  Battery E — min : {res.E.min():.2f} kWh  (limit {E_MIN:.1f})")
-    print(f"  Battery E — max : {res.E.max():.2f} kWh  (limit {E_MAX:.1f})")
-    print(f"  E[0] = {res.E[0]:.2f}, E[T] = {res.E[T]:.2f}  (target {E_INIT:.1f})")
-
-    # Recompute battery dynamics and check consistency
-    E_check = np.empty(T + 1)
-    E_check[0] = res.E[0]
-    for t in range(T):
-        E_check[t + 1] = (1 - LAMBDA * DT) * E_check[t] + ETA_C * res.pc[t] * DT - res.pd[t] * DT / ETA_D
-    dyn_err = np.abs(E_check - res.E).max()
-    print(f"  Battery dynamics recheck — max error : {dyn_err:.2e} kWh")
-
-    # Solar curtailment
-    curtailed = (S - res.s).sum()
-    print(f"  Solar curtailed : {curtailed:,.0f} kWh  ({100*curtailed/S.sum():.1f}% of available)")
-
-    # Simultaneous charge+discharge (should be near zero in an LP)
-    tol = 1e-4
-    simul = np.sum((res.pc > tol) & (res.pd > tol))
-    print(f"  Hours with simultaneous charge+discharge : {simul}")
-
-    # Demand charge cross-check: recompute peak from solution arrays
-    pk_off_check = np.array([res.g[(month == m) & ~on].max() for m in range(1, 13)])
-    pk_on_check  = np.array([res.g[(month == m) &  on].max() for m in range(1, 13)])
-    demand_check = D_OFF * pk_off_check.sum() + D_ON * pk_on_check.sum()
-    print(f"  Demand charge recheck — solver ${res.demand_bill:,.2f} vs recomputed ${demand_check:,.2f}")
-
-    # Cost recomputation from arrays
-    cost_check = (df["c"].values @ res.g * DT) + D_OFF * pk_off_check.sum() + D_ON * pk_on_check.sum()
-    print(f"  Cost recheck   — solver ${res.cost:,.2f} vs recomputed ${cost_check:,.2f}")
-    print("=" * 55)
+def load(path: Path | None = None) -> EasyResult:
+    """Load a previously saved EasyResult."""
+    src = Path(path) if path else RESULTS_DIR / "easy_result.pkl"
+    with open(src, "rb") as f:
+        return pickle.load(f)
 
 
 if __name__ == "__main__":
@@ -265,4 +227,4 @@ if __name__ == "__main__":
     df = build_dataset()
     print(f"Solving LP over {len(df)} hours...")
     res = solve(df)
-    summarise(res)
+    save(res)
